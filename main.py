@@ -166,7 +166,7 @@ class Ui_MainWindow(object):
     @lru_cache(maxsize=1)
     def access_file(self):
         try:
-            with open(offlinescryfall, 'r') as json_data:
+            with open(offlinescryfall, 'r', encoding='utf-8') as json_data:
                 json_data = json.load(json_data)
                 return json_data
         except FileNotFoundError:
@@ -182,8 +182,9 @@ class Ui_MainWindow(object):
             for each in self.access_file():
                 if each['id'] == scryfall_id:
                     return each
-        except:
+        except Exception as e:
             print("Error at", id, "exiting.")
+            print(e)
             exit(1)
 
 
@@ -216,11 +217,15 @@ class Ui_MainWindow(object):
                     break
                 id = each[1]
                 quantity = each[4]
+                if iteration == 0:
+                    self.textEdit.append(f"Preparing files, this might take a bit..")
+                    QtWidgets.QApplication.processEvents()
+                    print("Preparing files, this might take a bit..")
+                carddata = self.getcarddatabyid(id)
                 self.progressBar.setValue((iteration + 1)/total*100)
                 self.textEdit.append(f"[ {iteration + 1} / {total} ] Getting data for ID: {id}")
                 QtWidgets.QApplication.processEvents()
                 print("[", iteration + 1, "/", total, "] Getting data for ID:", id)
-                carddata = self.getcarddatabyid(id)
                 number = carddata['collector_number']
                 language = each[10]
 

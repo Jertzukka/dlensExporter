@@ -216,6 +216,7 @@ class Ui_MainWindow(object):
                 if not running:
                     break
                 id = each[1]
+                foil = each[2]
                 quantity = each[4]
                 if iteration == 0:
                     self.textEdit.append(f"Preparing files, this might take a bit..")
@@ -253,7 +254,7 @@ class Ui_MainWindow(object):
                     set = "Modern Masters 2017 Edition"
 
                 file.write(
-                    f'''"{quantity}","{quantity}","{name}","{set}","{number}","{condition}","{language}","","","","","","","",""\n''')
+                    f'''"{quantity}","{quantity}","{name}","{set}","{number}","{condition}","{language}","{foil}","","","","","","",""\n''')
 
         if running:
             print("Successfully imported", total, "entries into", newcsvname)

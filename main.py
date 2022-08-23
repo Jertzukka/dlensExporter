@@ -4,6 +4,7 @@ import sys
 
 from PySide2 import QtWidgets, QtGui
 
+import darkdetect
 import json
 import logging
 import sqlite3
@@ -272,7 +273,8 @@ class Ui_MainWindow(object):
 if __name__ == '__main__':
 
     app = QtWidgets.QApplication(sys.argv)
-    app.setStyleSheet(qdarkstyle.load_stylesheet_pyside2())
+    if darkdetect.isDark():
+        app.setStyleSheet(qdarkstyle.load_stylesheet_pyside2())
     ex = Ui_MainWindow()
     w = QtWidgets.QMainWindow()
     ex.setupUi(w)

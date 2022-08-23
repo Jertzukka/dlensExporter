@@ -7,6 +7,7 @@ from PySide2 import QtWidgets, QtGui
 import json
 import logging
 import sqlite3
+import qdarkstyle
 from datetime import datetime
 from functools import lru_cache
 from PySide2.QtCore import *
@@ -271,6 +272,7 @@ class Ui_MainWindow(object):
 if __name__ == '__main__':
 
     app = QtWidgets.QApplication(sys.argv)
+    app.setStyleSheet(qdarkstyle.load_stylesheet_pyside2())
     ex = Ui_MainWindow()
     w = QtWidgets.QMainWindow()
     ex.setupUi(w)

@@ -9,7 +9,7 @@ Python GUI program to convert .dlens files from Delver Lens N mobile application
 
 You need three files:
 
-* data.db from /res/raw/ in Delver Lens N APK, you can obtain this by extracting the APK downloadable for example from https://apps.evozi.com/apk-downloader/?id=delverlab.delverlens.
+* data.db from /res/raw/ in Delver Lens N APK, you can obtain this by extracting the APK downloadable for example from https://apkcombo.com/mtg-card-scanner-delver-lens/delverlab.delverlens/.
 * .json file with offline card data from Scryfall, downloadable from https://scryfall.com/docs/api/bulk-data, Default Cards should suffice for most cases.
 * .dlens file from Delver Lens N through it's backup or export deck option.
 

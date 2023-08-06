@@ -145,6 +145,7 @@ class Ui_MainWindow(object):
             print("Scryfall file set to:", fname[0])
             self.textEdit.append(f"Scryfall file set to: {fname[0]}")
             self.lineEdit_2.setText(fname[0])
+            self.access_file.cache_clear()
         elif type == "dlens":
             print("Dlens file set to:", fname[0])
             self.textEdit.append(f"Dlens file set to: {fname[0]}")
@@ -156,6 +157,7 @@ class Ui_MainWindow(object):
         apkconn = sqlite3.connect(apkdatabase)
         global apkc
         apkc = apkconn.cursor()
+
 
     def connectdlensdatabase(self):
         dlensconn = sqlite3.connect(dlens)
@@ -173,6 +175,7 @@ class Ui_MainWindow(object):
             logging.error("Scryfall json not found.")
 
 
+    @lru_cache
     def getcarddatabyid(self, id):
         t = (id,)
         apkc.execute('SELECT scryfall_id FROM cards WHERE _id=?', t)
@@ -189,7 +192,6 @@ class Ui_MainWindow(object):
 
 
     def startexport(self):
-
         global apkdatabase, offlinescryfall, dlens, running
         running = True
         apkdatabase = self.lineEdit.text()
@@ -211,6 +213,7 @@ class Ui_MainWindow(object):
         # For each card, match the id to the apk database and with scryfall_id search further data from Scryfall database.
         with open(newcsvname, "a") as file:
             total = len(cardstoimport)
+            errors = 0
             file.write(f'Count,Tradelist Count,Name,Edition,Card Number,Condition,Language,Foil,Signed,Artist Proof,Altered Art,Misprint,Promo,Textless,My Price\n')
             for iteration, each in enumerate(cardstoimport):
                 if not running:
@@ -226,7 +229,14 @@ class Ui_MainWindow(object):
                 self.progressBar.setValue((iteration + 1)/total*100)
                 self.textEdit.append(f"[ {iteration + 1} / {total} ] Getting data for ID: {id}")
                 QtWidgets.QApplication.processEvents()
-                print("[", iteration + 1, "/", total, "] Getting data for ID:", id)
+
+                if carddata is None:
+                    self.textEdit.append(f"[ {iteration + 1} / {total} ] Card could not be found from the Scryfall .json with ID: {id}")
+                    print("[", iteration + 1, "/", total, "] Card could not be found from the Scryfall .json with ID:", id)
+                    QtWidgets.QApplication.processEvents()
+                    errors = errors + 1
+                    continue
+
                 number = carddata['collector_number']
                 language = each[10]
 
@@ -252,18 +262,30 @@ class Ui_MainWindow(object):
                     set = "Modern Masters 2015 Edition"
                 elif set == "Modern Masters 2017":
                     set = "Modern Masters 2017 Edition"
+                elif set == "Time Spiral Timeshifted":
+                    set = 'Time Spiral ""Timeshifted""'
+                elif set == "Commander 2011":
+                    set = "Commander"
+                elif set == "Friday Night Magic 2009":
+                    set = "Friday Night Magic"
+                elif set == "DCI Promos":
+                    set = "WPN/Gateway"
 
                 file.write(
                     f'''"{quantity}","{quantity}","{name}","{set}","{number}","{condition}","{language}","{foil}","","","","","","",""\n''')
 
         if running:
-            print("Successfully imported", total, "entries into", newcsvname)
-            self.textEdit.append(f"Successfully imported {total} entries into {newcsvname}")
-            QtWidgets.QApplication.processEvents()
+            print(f"Successfully imported {total - errors} entries into {newcsvname}")
+            self.textEdit.append(f"Successfully imported {total - errors} entries into {newcsvname}")
         else:
-            print(f"Stopping early, imported {iteration} out of {total} cards in {newcsvname}")
-            self.textEdit.append(f"Stopping early, imported {iteration} out of {total} entries in {newcsvname}")
-            QtWidgets.QApplication.processEvents()
+            print(f"Stopping early, imported {iteration - errors} out of {total} cards in {newcsvname}")
+            self.textEdit.append(f"Stopping early, imported {iteration - errors} out of {total} entries in {newcsvname}")
+
+        if errors > 0:
+            print("There was", errors, "error(s) finding correct IDs from the Scryfall .json. To fix this, please use a larger Scryfall bulk data file such as 'All Cards' instead of 'Default Cards'.")
+            self.textEdit.append(f"There was {errors} error(s) finding correct IDs from the Scryfall .json. To fix this, please use a larger Scryfall bulk data file such as 'All Cards' instead of 'Default Cards'.")
+
+        QtWidgets.QApplication.processEvents()
 
         running = False
 

@@ -18,4 +18,3 @@ Clone the repository and install necessary dependecies. Under releases I have in
 ## Notes
 
 * Currently only supports Deckbox .csv format. There are some differences between what Scryfall API provides as card or set names, and some of these are automatically converted. I have added some I've come across myself, but it's not all-inclusive.
-* Linux binary is compiled against glibc 2.33 and that or newer is required.

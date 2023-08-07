@@ -5,14 +5,11 @@ import sys
 from PySide2 import QtWidgets, QtGui
 
 import json
-import logging
 import sqlite3
 from datetime import datetime
 from functools import lru_cache
 from PySide2.QtCore import *
 from PySide2.QtWidgets import *
-
-global apkc, dlensc, apkdatabase, offlinescryfall, dlens, running
 
 
 class Ui_MainWindow(object):
@@ -73,7 +70,7 @@ class Ui_MainWindow(object):
         self.pushButton_5 = QPushButton(self.centralwidget)
         self.pushButton_5.setObjectName(u"pushButton_5")
         self.pushButton_5.setGeometry(QRect(693, 170, 81, 31))
-        self.pushButton_5.clicked.connect(self.stoprunning)
+        self.pushButton_5.clicked.connect(lambda: self.setRunning(False))
         self.textEdit = QTextEdit(self.centralwidget)
         self.textEdit.setObjectName(u"textEdit")
         self.textEdit.setGeometry(QRect(20, 230, 761, 131))
@@ -88,6 +85,9 @@ class Ui_MainWindow(object):
         self.statusbar = QStatusBar(MainWindow)
         self.statusbar.setObjectName(u"statusbar")
         MainWindow.setStatusBar(self.statusbar)
+        self.errorFormat = '<span style="color:red;">{}</span>'
+        self.warningFormat = '<span style="color:orange;">{}</span>'
+        self.validFormat = '<span style="color:green;">{}</span>'
 
         self.menubar.addAction(self.menuMenu.menuAction())
         self.menuMenu.addAction(self.actionAbout)
@@ -107,9 +107,17 @@ class Ui_MainWindow(object):
                 self.lineEdit_3.setText(os.path.join(os.getcwd(), file))
 
 
-    def stoprunning(self):
+    def setRunning(self, bool):
         global running
-        running = False
+        running = bool
+        if bool == False:
+            self.access_file.cache_clear()
+            self.getcarddatabyid.cache_clear()
+
+
+    def getRunning(self):
+        global running
+        return running
 
 
     def showAbout(self):
@@ -171,8 +179,14 @@ class Ui_MainWindow(object):
             with open(offlinescryfall, 'r', encoding='utf-8') as json_data:
                 json_data = json.load(json_data)
                 return json_data
+        except MemoryError:
+            self.textEdit.append(self.errorFormat.format("Out of memory! Scryfall .json file is too large to load into memory."))
+            print("Out of memory! Scryfall .json file is too large to load into memory.")
+            self.setRunning(False)
         except FileNotFoundError:
-            logging.error("Scryfall json not found.")
+            self.textEdit.append(self.errorFormat.format("Scryfall json not found."))
+            print("Scryfall json not found.")
+            self.setRunning(False)
 
 
     @lru_cache
@@ -185,15 +199,13 @@ class Ui_MainWindow(object):
             for each in self.access_file():
                 if each['id'] == scryfall_id:
                     return each
-        except Exception as e:
-            print("Error at", id, "exiting.")
-            print(e)
-            exit(1)
+        except TypeError:
+            return None
 
 
     def startexport(self):
-        global apkdatabase, offlinescryfall, dlens, running
-        running = True
+        global apkdatabase, offlinescryfall, dlens
+        self.setRunning(True)
         apkdatabase = self.lineEdit.text()
         offlinescryfall = self.lineEdit_2.text()
         dlens = self.lineEdit_3.text()
@@ -216,15 +228,16 @@ class Ui_MainWindow(object):
             errors = 0
             file.write(f'Count,Tradelist Count,Name,Edition,Card Number,Condition,Language,Foil,Signed,Artist Proof,Altered Art,Misprint,Promo,Textless,My Price\n')
             for iteration, each in enumerate(cardstoimport):
-                if not running:
-                    break
-                id = each[1]
-                foil = each[2]
-                quantity = each[4]
                 if iteration == 0:
                     self.textEdit.append(f"Preparing files, this might take a bit..")
                     QtWidgets.QApplication.processEvents()
                     print("Preparing files, this might take a bit..")
+                    self.access_file()
+                if not self.getRunning():
+                    break
+                id = each[1]
+                foil = each[2]
+                quantity = each[4]
                 carddata = self.getcarddatabyid(id)
                 self.progressBar.setValue((iteration + 1)/total*100)
                 self.textEdit.append(f"[ {iteration + 1} / {total} ] Getting data for ID: {id}")
@@ -274,20 +287,24 @@ class Ui_MainWindow(object):
                 file.write(
                     f'''"{quantity}","{quantity}","{name}","{set}","{number}","{condition}","{language}","{foil}","","","","","","",""\n''')
 
-        if running:
-            print(f"Successfully imported {total - errors} entries into {newcsvname}")
-            self.textEdit.append(f"Successfully imported {total - errors} entries into {newcsvname}")
+        if self.getRunning():
+            if errors > 0:
+                print(f"Successfully imported {total - errors} entries into {newcsvname}")
+                self.textEdit.append(f"Successfully imported {total - errors} entries into {newcsvname}")
+                print(f"There was {errors} error(s) finding correct IDs from the Scryfall .json. To fix this, please use a larger Scryfall bulk data file such as 'All Cards' instead of 'Default Cards'.")
+                self.textEdit.append(self.warningFormat.format(f"There was {errors} error(s) finding correct IDs from the Scryfall .json. To fix this, please use a larger Scryfall bulk data file such as 'All Cards' instead of 'Default Cards'."))
+            else:
+                print(f"Successfully imported {total} entries into {newcsvname}")
+                self.textEdit.append(self.validFormat.format(f"Successfully imported {total} entries into {newcsvname}"))
         else:
             print(f"Stopping early, imported {iteration - errors} out of {total} cards in {newcsvname}")
             self.textEdit.append(f"Stopping early, imported {iteration - errors} out of {total} entries in {newcsvname}")
 
-        if errors > 0:
-            print("There was", errors, "error(s) finding correct IDs from the Scryfall .json. To fix this, please use a larger Scryfall bulk data file such as 'All Cards' instead of 'Default Cards'.")
-            self.textEdit.append(f"There was {errors} error(s) finding correct IDs from the Scryfall .json. To fix this, please use a larger Scryfall bulk data file such as 'All Cards' instead of 'Default Cards'.")
+
 
         QtWidgets.QApplication.processEvents()
 
-        running = False
+        self.setRunning(False)
 
 
 if __name__ == '__main__':

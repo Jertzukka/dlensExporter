@@ -211,7 +211,7 @@ class Ui_MainWindow(object):
         newcsvname = now.strftime("%d_%m_%Y-%H_%M_%S") + ".csv"
 
         # For each card, match the id to the apk database and with scryfall_id search further data from Scryfall database.
-        with open(newcsvname, "a") as file:
+        with open(newcsvname, "a", encoding="utf-8") as file:
             total = len(cardstoimport)
             errors = 0
             file.write(f'Count,Tradelist Count,Name,Edition,Card Number,Condition,Language,Foil,Signed,Artist Proof,Altered Art,Misprint,Promo,Textless,My Price\n')

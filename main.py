@@ -189,7 +189,7 @@ class Ui_MainWindow(object):
             self.setRunning(False)
 
 
-    @lru_cache
+    @lru_cache(maxsize=128)
     def getcarddatabyid(self, id):
         t = (id,)
         apkc.execute('SELECT scryfall_id FROM cards WHERE _id=?', t)
@@ -229,9 +229,9 @@ class Ui_MainWindow(object):
             file.write(f'Count,Tradelist Count,Name,Edition,Card Number,Condition,Language,Foil,Signed,Artist Proof,Altered Art,Misprint,Promo,Textless,My Price\n')
             for iteration, each in enumerate(cardstoimport):
                 if iteration == 0:
-                    self.textEdit.append(f"Preparing files, this might take a bit..")
+                    self.textEdit.append(f"Preparing files, this might take a bit...")
                     QtWidgets.QApplication.processEvents()
-                    print("Preparing files, this might take a bit..")
+                    print("Preparing files, this might take a bit...")
                     self.access_file()
                 if not self.getRunning():
                     break

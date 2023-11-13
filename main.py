@@ -4,8 +4,9 @@ import sys
 
 from PySide2 import QtWidgets, QtGui
 
-import ijson
+import ijson, json
 import sqlite3
+import platformdirs
 from datetime import datetime
 from functools import lru_cache
 from PySide2.QtCore import *
@@ -110,6 +111,9 @@ class Ui_MainWindow(object):
             elif file.endswith(".dlens"):
                 self.lineEdit_3.setText(os.path.join(os.getcwd(), file))
 
+        # restore last used filepaths
+        self.load_filepaths()
+
     def log(self, string, format_type=None):
         print(string)
         if format_type and type(format_type) == str:
@@ -198,7 +202,43 @@ class Ui_MainWindow(object):
             return self.scryfall_database[scryfall_id]
         except TypeError:
             return None
+    
+    # save paths of the Delver DB, Scryfall JSON, and last dlens list
+    # to reload on program re-open
+    def save_filepaths(self):
+        global apkdatabase, offlinescryfall, dlens
+        config_path = platformdirs.user_runtime_dir('dlensExporter', 'dlensExporter')
+        config_file_path = os.path.join(config_path, 'config.json')
+        self.log(f"Saving config to {config_file_path}.")
+        if not os.path.exists(config_path):
+            os.makedirs(config_path)
+        config_json = json.dumps({
+            "apkdatabase": apkdatabase,
+            "offlinescryfall": offlinescryfall,
+            "dlens": dlens
+            })
+        with open(config_file_path, 'w') as ofile:
+            ofile.write(config_json)
 
+    def load_filepaths(self):
+        global apkdatabase, offlinescryfall, dlens
+        config_path = platformdirs.user_runtime_dir('dlensExporter', 'dlensExporter')
+        config_file_path = os.path.join(config_path, 'config.json')
+        if not os.path.exists(config_file_path):
+            return
+        self.log(f"Loading last config from {config_file_path}.")
+        with open(config_file_path, 'r') as ofile:
+            json_object = json.load(ofile)
+        if json_object["apkdatabase"]:
+            apkdatabase = json_object["apkdatabase"]
+            self.lineEdit.setText(apkdatabase)
+        if json_object["offlinescryfall"]:
+            offlinescryfall = json_object["offlinescryfall"]
+            self.lineEdit_2.setText(offlinescryfall)
+        if json_object["dlens"]:
+            dlens = json_object["dlens"]
+            self.lineEdit_3.setText(dlens)
+        return
 
     def startexport(self):
         global apkdatabase, offlinescryfall, dlens
@@ -206,6 +246,7 @@ class Ui_MainWindow(object):
         apkdatabase = self.lineEdit.text()
         offlinescryfall = self.lineEdit_2.text()
         dlens = self.lineEdit_3.text()
+        self.save_filepaths()
 
         # Open both SQLite files
         self.connectapkdatabase()

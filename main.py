@@ -93,6 +93,9 @@ class Ui_MainWindow(object):
         self.menuMenu.addAction(self.actionAbout)
         self.menuMenu.addAction(self.actionQuit)
 
+        self.scryfall_errors = 0
+        self.delver_errors = 0
+
 
         self.retranslateUi(MainWindow)
 
@@ -106,11 +109,17 @@ class Ui_MainWindow(object):
             elif file.endswith(".dlens"):
                 self.lineEdit_3.setText(os.path.join(os.getcwd(), file))
 
+    def log(self, string, format_type=None):
+        print(string)
+        if format_type and type(format_type) == str:
+            string = format_type.format(string)
+        self.textEdit.append(string)
+        return
 
-    def setRunning(self, bool):
+    def setRunning(self, is_running):
         global running
-        running = bool
-        if bool == False:
+        running = is_running
+        if is_running == False:
             self.access_file.cache_clear()
             self.getcarddatabyid.cache_clear()
 
@@ -146,17 +155,14 @@ class Ui_MainWindow(object):
         if fname[0] == "":
             return
         elif type == "apk":
-            print("APK file set to:", fname[0])
-            self.textEdit.append(f"APK file set to: {fname[0]}")
+            self.log(f"APK file set to: {fname[0]}")
             self.lineEdit.setText(fname[0])
         elif type == "scryfall":
-            print("Scryfall file set to:", fname[0])
-            self.textEdit.append(f"Scryfall file set to: {fname[0]}")
+            self.log(f"Scryfall file set to: {fname[0]}")
             self.lineEdit_2.setText(fname[0])
             self.access_file.cache_clear()
         elif type == "dlens":
-            print("Dlens file set to:", fname[0])
-            self.textEdit.append(f"Dlens file set to: {fname[0]}")
+            self.log(f"Dlens file set to: {fname[0]}")
             self.lineEdit_3.setText(fname[0])
 
 
@@ -180,21 +186,23 @@ class Ui_MainWindow(object):
                 json_data = json.load(json_data)
                 return json_data
         except MemoryError:
-            self.textEdit.append(self.errorFormat.format("Out of memory! Scryfall .json file is too large to load into memory."))
-            print("Out of memory! Scryfall .json file is too large to load into memory.")
+            self.log("Out of memory! Scryfall .json file is too large to load into memory.")
             self.setRunning(False)
         except FileNotFoundError:
-            self.textEdit.append(self.errorFormat.format("Scryfall json not found."))
-            print("Scryfall json not found.")
+            self.log("Scryfall json not found.")
             self.setRunning(False)
 
+    @lru_cache(maxsize=128)
+    def ScryfallIDFromDelver(self, delver_id):
+        t = (delver_id,)
+        apkc.execute('SELECT scryfall_id FROM cards WHERE _id=?', t)
+        apkc_result = apkc.fetchone()
+        if not apkc_result:
+            return None
+        return apkc_result[0]
 
     @lru_cache(maxsize=128)
-    def getcarddatabyid(self, id):
-        t = (id,)
-        apkc.execute('SELECT scryfall_id FROM cards WHERE _id=?', t)
-        scryfall_id = apkc.fetchone()[0]
-
+    def getcarddatabyid(self, scryfall_id):
         try:
             for each in self.access_file():
                 if each['id'] == scryfall_id:
@@ -225,29 +233,35 @@ class Ui_MainWindow(object):
         # For each card, match the id to the apk database and with scryfall_id search further data from Scryfall database.
         with open(newcsvname, "a", encoding="utf-8") as file:
             total = len(cardstoimport)
-            errors = 0
+            self.scryfall_errors = 0
+            self.delver_errors = 0
             file.write(f'Count,Tradelist Count,Name,Edition,Card Number,Condition,Language,Foil,Signed,Artist Proof,Altered Art,Misprint,Promo,Textless,My Price\n')
             for iteration, each in enumerate(cardstoimport):
                 if iteration == 0:
-                    self.textEdit.append(f"Preparing files, this might take a bit...")
+                    self.log(f"Preparing files, this might take a bit...")
                     QtWidgets.QApplication.processEvents()
-                    print("Preparing files, this might take a bit...")
                     self.access_file()
                 if not self.getRunning():
                     break
-                id = each[1]
+                delver_id = each[1]
                 foil = each[2]
                 quantity = each[4]
-                carddata = self.getcarddatabyid(id)
                 self.progressBar.setValue((iteration + 1)/total*100)
-                self.textEdit.append(f"[ {iteration + 1} / {total} ] Getting data for ID: {id}")
+                self.textEdit.append(f"[ {iteration + 1} / {total} ] Getting data for ID: {delver_id}")
                 QtWidgets.QApplication.processEvents()
 
-                if carddata is None:
-                    self.textEdit.append(f"[ {iteration + 1} / {total} ] Card could not be found from the Scryfall .json with ID: {id}")
-                    print("[", iteration + 1, "/", total, "] Card could not be found from the Scryfall .json with ID:", id)
+                scryfall_id = self.ScryfallIDFromDelver(delver_id)
+                if scryfall_id is None:
+                    self.log(f"[ {iteration + 1} / {total} ] Couldn't find id Delver id {delver_id}; is your Delver DB out-of-date?")
                     QtWidgets.QApplication.processEvents()
-                    errors = errors + 1
+                    self.delver_errors = self.delver_errors + 1
+                    continue
+
+                carddata = self.getcarddatabyid(scryfall_id)
+                if carddata is None:
+                    self.log(f"[ {iteration + 1} / {total} ] Card could not be found from the Scryfall .json with Delver ID: {delver_id}")
+                    QtWidgets.QApplication.processEvents()
+                    self.scryfall_errors = self.scryfall_errors + 1
                     continue
 
                 number = carddata['collector_number']
@@ -287,18 +301,22 @@ class Ui_MainWindow(object):
                 file.write(
                     f'''"{quantity}","{quantity}","{name}","{set}","{number}","{condition}","{language}","{foil}","","","","","","",""\n''')
 
+        errors = self.scryfall_errors + self.delver_errors
         if self.getRunning():
             if errors > 0:
-                print(f"Successfully imported {total - errors} entries into {newcsvname}")
-                self.textEdit.append(f"Successfully imported {total - errors} entries into {newcsvname}")
-                print(f"There was {errors} error(s) finding correct IDs from the Scryfall .json. To fix this, please use a larger Scryfall bulk data file such as 'All Cards' instead of 'Default Cards'.")
-                self.textEdit.append(self.warningFormat.format(f"There was {errors} error(s) finding correct IDs from the Scryfall .json. To fix this, please use a larger Scryfall bulk data file such as 'All Cards' instead of 'Default Cards'."))
+                self.log(f"Successfully imported {total - errors} entries into {newcsvname}")
+                if self.scryfall_errors >= 1:
+                    self.log(f"There {'was' if errors > 1 else 'were'}  {self.scryfall_errors} error{'s' if errors > 1 else ''} finding card data from the Scryfall .json. " 
+                            "To fix this, please use a larger Scryfall bulk data file such as 'All Cards' instead of 'Default Cards'.", 
+                            format_type=self.warningFormat)
+                if self.delver_errors >= 1:
+                    self.log(f"There {'was' if errors > 1 else 'were'}  {self.delver_errors} error{'s' if errors > 1 else ''} finding correct Scryfall IDs from the Delver Database. " 
+                            "To fix this, please make sure your local Delver DB file is up-to-date with the instance that created the list.", 
+                            format_type=self.warningFormat)
             else:
-                print(f"Successfully imported {total} entries into {newcsvname}")
-                self.textEdit.append(self.validFormat.format(f"Successfully imported {total} entries into {newcsvname}"))
+                self.log(f"Successfully imported {total} entries into {newcsvname}", format_type=self.validFormat)
         else:
-            print(f"Stopping early, imported {iteration - errors} out of {total} cards in {newcsvname}")
-            self.textEdit.append(f"Stopping early, imported {iteration - errors} out of {total} entries in {newcsvname}")
+            self.log(f"Stopping early, imported {iteration - errors} out of {total} cards in {newcsvname}")
 
 
 

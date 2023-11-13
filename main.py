@@ -4,7 +4,7 @@ import sys
 
 from PySide2 import QtWidgets, QtGui
 
-import json
+import ijson
 import sqlite3
 from datetime import datetime
 from functools import lru_cache
@@ -95,7 +95,7 @@ class Ui_MainWindow(object):
 
         self.scryfall_errors = 0
         self.delver_errors = 0
-
+        self.scryfall_fd = None
 
         self.retranslateUi(MainWindow)
 
@@ -120,7 +120,7 @@ class Ui_MainWindow(object):
         global running
         running = is_running
         if is_running == False:
-            self.access_file.cache_clear()
+            # self.access_file.cache_clear()
             self.getcarddatabyid.cache_clear()
 
 
@@ -160,7 +160,7 @@ class Ui_MainWindow(object):
         elif type == "scryfall":
             self.log(f"Scryfall file set to: {fname[0]}")
             self.lineEdit_2.setText(fname[0])
-            self.access_file.cache_clear()
+            # self.access_file.cache_clear()
         elif type == "dlens":
             self.log(f"Dlens file set to: {fname[0]}")
             self.lineEdit_3.setText(fname[0])
@@ -179,18 +179,18 @@ class Ui_MainWindow(object):
         dlensc = dlensconn.cursor()
 
 
-    @lru_cache(maxsize=1)
-    def access_file(self):
-        try:
-            with open(offlinescryfall, 'r', encoding='utf-8') as json_data:
-                json_data = json.load(json_data)
-                return json_data
-        except MemoryError:
-            self.log("Out of memory! Scryfall .json file is too large to load into memory.")
-            self.setRunning(False)
-        except FileNotFoundError:
-            self.log("Scryfall json not found.")
-            self.setRunning(False)
+    # @lru_cache(maxsize=1)
+    # def access_file(self):
+    #     try:
+    #         with open(offlinescryfall, 'r', encoding='utf-8') as json_data:
+    #             json_data = json.load(json_data)
+    #             return json_data
+    #     except MemoryError:
+    #         self.log("Out of memory! Scryfall .json file is too large to load into memory.")
+    #         self.setRunning(False)
+    #     except FileNotFoundError:
+    #         self.log("Scryfall json not found.")
+    #         self.setRunning(False)
 
     @lru_cache(maxsize=128)
     def ScryfallIDFromDelver(self, delver_id):
@@ -204,9 +204,10 @@ class Ui_MainWindow(object):
     @lru_cache(maxsize=128)
     def getcarddatabyid(self, scryfall_id):
         try:
-            for each in self.access_file():
-                if each['id'] == scryfall_id:
-                    return each
+            self.scryfall_fd.seek(0)
+            for record in ijson.items(self.scryfall_fd, "item"):
+                if record['id'] == scryfall_id:
+                    return record
         except TypeError:
             return None
 
@@ -240,7 +241,10 @@ class Ui_MainWindow(object):
                 if iteration == 0:
                     self.log(f"Preparing files, this might take a bit...")
                     QtWidgets.QApplication.processEvents()
-                    self.access_file()
+                    if self.scryfall_fd and not self.scryfall_fd.closed:
+                        self.scryfall_fd.close()
+                    self.scryfall_fd = open(offlinescryfall, 'rb')
+                    # self.access_file()
                 if not self.getRunning():
                     break
                 delver_id = each[1]
@@ -280,26 +284,31 @@ class Ui_MainWindow(object):
                     condition = "Good (Lightly Played)"
 
                 # Fix set names from Scryfall to Deckbox
-                set = carddata['set_name']
-                if set == "Magic 2015":
-                    set = "Magic 2015 Core Set"
-                elif set == "Magic 2014":
-                    set = "Magic 2014 Core Set"
-                elif set == "Modern Masters 2015":
-                    set = "Modern Masters 2015 Edition"
-                elif set == "Modern Masters 2017":
-                    set = "Modern Masters 2017 Edition"
-                elif set == "Time Spiral Timeshifted":
-                    set = 'Time Spiral ""Timeshifted""'
-                elif set == "Commander 2011":
-                    set = "Commander"
-                elif set == "Friday Night Magic 2009":
-                    set = "Friday Night Magic"
-                elif set == "DCI Promos":
-                    set = "WPN/Gateway"
+                set_name = carddata['set_name']
+                if set_name == "Magic 2015":
+                    set_name = "Magic 2015 Core Set"
+                elif set_name == "Magic 2014":
+                    set_name = "Magic 2014 Core Set"
+                elif set_name == "Modern Masters 2015":
+                    set_name = "Modern Masters 2015 Edition"
+                elif set_name == "Modern Masters 2017":
+                    set_name = "Modern Masters 2017 Edition"
+                elif set_name == "Time Spiral Timeshifted":
+                    set_name = 'Time Spiral ""Timeshifted""'
+                elif set_name == "Commander 2011":
+                    set_name = "Commander"
+                elif set_name == "Friday Night Magic 2009":
+                    set_name = "Friday Night Magic"
+                elif set_name == "DCI Promos":
+                    set_name = "WPN/Gateway"
 
                 file.write(
-                    f'''"{quantity}","{quantity}","{name}","{set}","{number}","{condition}","{language}","{foil}","","","","","","",""\n''')
+                    f'''"{quantity}","{quantity}","{name}","{set_name}","{number}","{condition}","{language}","{foil}","","","","","","",""\n''')
+
+                self.textEdit.append(f"[ {iteration + 1} / {total} ] Imported {name} - {set_name} #{number}")
+
+            self.scryfall_fd.close()
+            self.scryfall_fd = None
 
         errors = self.scryfall_errors + self.delver_errors
         if self.getRunning():

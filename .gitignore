@@ -130,3 +130,6 @@ dmypy.json
 
 # CSVs that may be generated in the directory
 *.csv
+
+# profiling results
+fil-result/

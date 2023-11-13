@@ -96,6 +96,7 @@ class Ui_MainWindow(object):
         self.scryfall_errors = 0
         self.delver_errors = 0
         self.scryfall_fd = None
+        self.scryfall_database = {}
 
         self.retranslateUi(MainWindow)
 
@@ -120,7 +121,6 @@ class Ui_MainWindow(object):
         global running
         running = is_running
         if is_running == False:
-            # self.access_file.cache_clear()
             self.getcarddatabyid.cache_clear()
 
 
@@ -160,7 +160,6 @@ class Ui_MainWindow(object):
         elif type == "scryfall":
             self.log(f"Scryfall file set to: {fname[0]}")
             self.lineEdit_2.setText(fname[0])
-            # self.access_file.cache_clear()
         elif type == "dlens":
             self.log(f"Dlens file set to: {fname[0]}")
             self.lineEdit_3.setText(fname[0])
@@ -178,19 +177,11 @@ class Ui_MainWindow(object):
         global dlensc
         dlensc = dlensconn.cursor()
 
-
-    # @lru_cache(maxsize=1)
-    # def access_file(self):
-    #     try:
-    #         with open(offlinescryfall, 'r', encoding='utf-8') as json_data:
-    #             json_data = json.load(json_data)
-    #             return json_data
-    #     except MemoryError:
-    #         self.log("Out of memory! Scryfall .json file is too large to load into memory.")
-    #         self.setRunning(False)
-    #     except FileNotFoundError:
-    #         self.log("Scryfall json not found.")
-    #         self.setRunning(False)
+    def init_scryfall_database(self):
+        self.scryfall_database = {}
+        relevant_fields = ["name", "set", "set_name", "collector_number"]
+        for record in ijson.items(self.scryfall_fd, "item"):
+            self.scryfall_database[record["id"]] = {key:record[key] for key in relevant_fields}
 
     @lru_cache(maxsize=128)
     def ScryfallIDFromDelver(self, delver_id):
@@ -204,10 +195,7 @@ class Ui_MainWindow(object):
     @lru_cache(maxsize=128)
     def getcarddatabyid(self, scryfall_id):
         try:
-            self.scryfall_fd.seek(0)
-            for record in ijson.items(self.scryfall_fd, "item"):
-                if record['id'] == scryfall_id:
-                    return record
+            return self.scryfall_database[scryfall_id]
         except TypeError:
             return None
 
@@ -244,7 +232,8 @@ class Ui_MainWindow(object):
                     if self.scryfall_fd and not self.scryfall_fd.closed:
                         self.scryfall_fd.close()
                     self.scryfall_fd = open(offlinescryfall, 'rb')
-                    # self.access_file()
+                    self.init_scryfall_database()
+                    self.log(f"Loaded {len(self.scryfall_database.keys())} cards from {offlinescryfall}.")
                 if not self.getRunning():
                     break
                 delver_id = each[1]

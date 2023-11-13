@@ -224,6 +224,8 @@ class Ui_MainWindow(object):
             total = len(cardstoimport)
             self.scryfall_errors = 0
             self.delver_errors = 0
+            # write UTF-8 byte order marker to clue in certain programs to file encoding
+            file.write('\uFEFF')
             file.write(f'Count,Tradelist Count,Name,Edition,Card Number,Condition,Language,Foil,Signed,Artist Proof,Altered Art,Misprint,Promo,Textless,My Price\n')
             for iteration, each in enumerate(cardstoimport):
                 if iteration == 0:
